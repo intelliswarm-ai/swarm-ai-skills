@@ -1,7 +1,0 @@
-Yahoo Finance Data Aggregation for: {{symbol}}
-{{errors}}
-marketCap: {{marketCap}}
-price: {{price}}
-peRatio: {{peRatio}}
-dividendYield: {{dividendYield}}
-currency: {{currency}}

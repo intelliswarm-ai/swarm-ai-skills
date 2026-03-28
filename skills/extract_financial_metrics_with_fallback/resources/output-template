@@ -1,7 +1,0 @@
-Financial Metric Extracted:
-Ticker: {{ticker}}
-Period: {{period}}
-Metric: {{metric}}
-Value: {{value}}
-Fallback Used: {{fallbackUsed}}
-Provenance: {{provenance}}

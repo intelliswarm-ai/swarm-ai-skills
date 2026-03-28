@@ -5,5 +5,11 @@
 # Claude Code
 .claude/
 
+# Curator outputs (not published)
+_archived/
+_merged/
+skills/_merged/
+skills/_archived/
+
 # Maven
 curator/target/

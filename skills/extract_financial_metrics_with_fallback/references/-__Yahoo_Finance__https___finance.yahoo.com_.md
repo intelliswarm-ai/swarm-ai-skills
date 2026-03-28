@@ -1,2 +1,0 @@
-- [SEC EDGAR](https://www.sec.gov/edgar.shtml)
-- No proprietary data sources used.

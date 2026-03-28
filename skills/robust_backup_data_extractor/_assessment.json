@@ -1,16 +1,18 @@
 {
+  "dimensions" : {
+    "execution" : 18,
+    "universality" : 14,
+    "selfContainment" : 5,
+    "effectiveness" : 14,
+    "uniqueness" : 6,
+    "testCoverage" : 3,
+    "codeQuality" : 15
+  },
   "groupName" : "data-io: multi-yahoo",
-  "grade" : "B",
-  "assessedAt" : "2026-03-28T17:50:13.580918912",
+  "grade" : "C",
+  "assessedAt" : "2026-03-28T18:20:52.577308033",
   "passesCurationBar" : true,
   "rankInGroup" : 2,
-  "assessmentNotes" : [ "Execution: Compilation OK", "Execution: Sandbox run OK", "Execution: Output starts with ERROR — likely missing data", "Execution: Error path handled gracefully", "Effectiveness: 11 uses, 100% success → 23/25", "Code quality: existing=95/100, checks=[clean] → 20/20", "Test coverage: WARN — no examples found", "Test coverage: 0 examples, assertions=no → 4/15", "Uniqueness: 10/15 (group size=3)" ],
-  "totalScore" : 80,
-  "dimensions" : {
-    "testCoverage" : 4,
-    "codeQuality" : 20,
-    "effectiveness" : 23,
-    "uniqueness" : 10,
-    "execution" : 23
-  }
+  "assessmentNotes" : [ "Execution: Compilation OK", "Execution: Sandbox run OK", "Execution: Output starts with ERROR", "Execution: Error path handled gracefully", "Effectiveness: 11 uses, 100% success → 14/15", "Code quality: existing=95/100, checks=[clean] → 15/15", "Test coverage: WARN — no examples found", "Test coverage: 0 examples, assertions=no → 3/10", "Self-containment: depends on 2 skill(s) [fetch_and_parse_financials, usage_reporter] (5/15)", "Portability: [fully portable] → 14/15", "Uniqueness: 6/10 (group size=3)" ],
+  "totalScore" : 75
 }

@@ -1,16 +1,18 @@
 {
+  "dimensions" : {
+    "execution" : 20,
+    "universality" : 15,
+    "selfContainment" : 0,
+    "effectiveness" : 14,
+    "uniqueness" : 10,
+    "testCoverage" : 7,
+    "codeQuality" : 13
+  },
   "groupName" : "data-io: extract-company",
-  "grade" : "A",
-  "assessedAt" : "2026-03-28T17:50:13.560363752",
+  "grade" : "C",
+  "assessedAt" : "2026-03-28T18:20:52.553754145",
   "passesCurationBar" : true,
   "rankInGroup" : 1,
-  "assessmentNotes" : [ "Execution: Compilation OK", "Execution: Sandbox run OK", "Execution: Error path handled gracefully", "Effectiveness: 10 uses, 100% success → 23/25", "Code quality: existing=85/100, checks=[clean] → 18/20", "Test coverage: 3 examples, assertions=no → 11/15", "Uniqueness: 15/15 (group size=3)" ],
-  "totalScore" : 92,
-  "dimensions" : {
-    "testCoverage" : 11,
-    "codeQuality" : 18,
-    "effectiveness" : 23,
-    "uniqueness" : 15,
-    "execution" : 25
-  }
+  "assessmentNotes" : [ "Execution: Compilation OK", "Execution: Sandbox run OK", "Execution: Error path handled gracefully", "Effectiveness: 10 uses, 100% success → 14/15", "Code quality: existing=85/100, checks=[long (102 lines)] → 13/15", "Test coverage: 3 examples, assertions=no → 7/10", "Self-containment: FAIL — deep chain, depends on 3 skills [robust_financial_data_extractor, financial_data_web_search_and_calculation, auto_tool_composer] (0/15)", "Portability: [fully portable] → 15/15", "Uniqueness: 10/10 (group size=3)" ],
+  "totalScore" : 79
 }

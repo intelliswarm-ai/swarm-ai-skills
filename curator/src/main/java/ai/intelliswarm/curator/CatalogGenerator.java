@@ -44,6 +44,7 @@ public class CatalogGenerator {
                         assessment.skill(), assessment.executionScore(),
                         assessment.effectivenessScore(), assessment.codeQualityScore(),
                         assessment.testCoverageScore(), assessment.uniquenessScore(),
+                        assessment.selfContainmentScore(), assessment.universalityScore(),
                         assessment.totalScore(), assessment.grade(),
                         assessment.passesCurationBar(), entry.getKey(),
                         i + 1, assessment.assessmentNotes());
@@ -74,7 +75,9 @@ public class CatalogGenerator {
                         "effectiveness", assessment.effectivenessScore(),
                         "codeQuality", assessment.codeQualityScore(),
                         "testCoverage", assessment.testCoverageScore(),
-                        "uniqueness", assessment.uniquenessScore()
+                        "uniqueness", assessment.uniquenessScore(),
+                        "selfContainment", assessment.selfContainmentScore(),
+                        "universality", assessment.universalityScore()
                 ),
                 "assessedAt", LocalDateTime.now().toString(),
                 "assessmentNotes", assessment.assessmentNotes(),
