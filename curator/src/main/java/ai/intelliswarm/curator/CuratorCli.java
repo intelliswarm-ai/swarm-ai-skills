@@ -223,17 +223,18 @@ public class CuratorCli implements Callable<Integer> {
 
             var existing = MAPPER.readValue(assessmentFile.toFile(), Map.class);
             var updated = new LinkedHashMap<>(existing);
-            updated.put("liveTest", Map.of(
-                    "passed", result.passed(),
-                    "verified", result.passed(),
-                    "testedAt", LocalDateTime.now().toString(),
-                    "executionTimeMs", result.executionTimeMs(),
-                    "outputLength", result.outputLength(),
-                    "outputMatchesTemplate", result.outputMatchesTemplate(),
-                    "containsRealData", result.containsRealData(),
-                    "error", result.error() != null ? result.error() : "",
-                    "notes", result.notes()
-            ));
+            var liveTestData = new LinkedHashMap<String, Object>();
+            liveTestData.put("passed", result.passed());
+            liveTestData.put("verified", result.passed());
+            liveTestData.put("testedAt", LocalDateTime.now().toString());
+            liveTestData.put("executionTimeMs", result.executionTimeMs());
+            liveTestData.put("outputLength", result.outputLength());
+            liveTestData.put("outputMatchesTemplate", result.outputMatchesTemplate());
+            liveTestData.put("containsRealData", result.containsRealData());
+            liveTestData.put("testParams", result.testParams());
+            liveTestData.put("error", result.error() != null ? result.error() : "");
+            liveTestData.put("notes", result.notes());
+            updated.put("liveTest", liveTestData);
 
             MAPPER.writeValue(assessmentFile.toFile(), updated);
         } catch (Exception e) {
