@@ -1,6 +1,0 @@
-# Financials for {{company}}
-- Revenue: {{revenue}} [source: {{revenue_source}}]
-- Profit: {{profit}} [source: {{profit_source}}]
-- Valuation: {{valuation}} [source: {{valuation_source}}]
-...
-(Include errors and raw data if no structured info found)

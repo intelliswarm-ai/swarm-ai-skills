@@ -1,1 +1,0 @@
-- SEC EDGAR filings [CONFIRMED]

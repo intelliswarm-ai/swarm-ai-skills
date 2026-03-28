@@ -1,15 +1,16 @@
 # swarm-ai-skills
 
-A curated repository of AI agent skills for the [IntelliSwarm](https://github.com/intelliswarm-ai/swarm-ai) framework. Only skills that pass a strict, automated quality gate are published here.
+A curated repository of AI agent skills for the [IntelliSwarm](https://github.com/intelliswarm-ai/swarm-ai) framework.
+
+Only skills that pass both a strict automated quality gate **and** live verification against real APIs are published here. Everything else is archived.
 
 ## Repository Structure
 
 ```
 swarm-ai-skills/
-├── CATALOG.md              # Auto-generated ranked catalog of all published skills
-├── skills/                 # Published skill packages (SKILL.md + _meta.json each)
-│   ├── _archived/          # Skills that failed curation (kept for reference)
-│   └── _merged/            # Merged super-skills combining overlapping capabilities
+├── CATALOG.md              # Auto-generated ranked catalog of verified skills
+├── skills/                 # Only VERIFIED skill packages live here
+│   └── _archived/          # Skills that failed curation or live testing
 └── curator/                # The SkillCurator CLI tool (Java 21 + Groovy)
 ```
 
@@ -19,135 +20,133 @@ Each skill package contains:
 |------|---------|
 | `SKILL.md` | Skill definition: description, Groovy code, examples, output template |
 | `_meta.json` | Metadata: usage stats, quality scores, version history |
-| `_assessment.json` | Curator's assessment: scores per dimension, grade, group rank |
+| `_assessment.json` | Curator's full assessment: scores, grade, group rank, live test results |
 
-## Skill Evaluation Process
+## How Skills Get Published
 
-Every skill goes through a rigorous, automated evaluation pipeline before it can be published. The process is designed to ensure that only high-quality, genuinely useful, and non-redundant skills make it into the repository.
+A skill must pass **two stages** before it appears in this repository.
 
-### Quality Gate
+### Stage 1: Automated Quality Gate (75/100 minimum)
 
-**Minimum score for publication: 75/100**
+Skills are scored on a 100-point scale across seven dimensions:
 
-Skills are graded on a 100-point scale across seven dimensions. Each dimension tests a different aspect of skill quality:
+| Dimension | Max | What It Measures |
+|-----------|-----|-----------------|
+| Execution Test | 20 | Does the code compile, run in a sandbox, and handle errors gracefully? |
+| Runtime Effectiveness | 15 | Historical success rate and usage volume from production runs |
+| Code Quality | 15 | Parameter validation, error handling, structured output, no hardcoded secrets |
+| Test Coverage | 10 | Examples, assertions, and expected output templates in SKILL.md |
+| Uniqueness | 10 | How different is this skill from others in its group? (Jaccard similarity) |
+| Self-Containment | 15 | Can it run standalone? Skills that depend on chains of other skills score 0 |
+| Portability | 15 | Is all config inline? Clear input/output contract? No external state? |
 
-| Dimension | Max Score | What It Measures |
-|-----------|-----------|-----------------|
-| Execution Test | 20 | Does the code actually compile and run? |
-| Runtime Effectiveness | 15 | How well does it perform in real-world usage? |
-| Code Quality | 15 | Is the code well-structured and safe? |
-| Test Coverage | 10 | Are there examples and expected outputs? |
-| Uniqueness | 10 | Does it bring something new to the table? |
-| **Self-Containment** | **15** | **Can it run without depending on other skills?** |
-| **Portability** | **15** | **Is all config inline? Can you drop it in and it just works?** |
+Skills scoring below 75 are archived immediately. Domain-specific skills (finance, medical, etc.) are welcome as long as they are self-contained and portable.
 
-### Dimension Breakdown
+### Stage 2: Live Verification (the real test)
 
-#### 1. Execution Test (0-20 points)
+Skills that pass Stage 1 are then tested against **real APIs with no mocks**:
 
-The skill's Groovy code is put through four checks:
+1. The skill's Groovy code runs in a sandbox with real HTTP tools (not mock placeholders)
+2. Infrastructure tools (`web_search`, `http_request`, `web_content_extract`) make actual network requests
+3. The output is validated:
+   - Must be non-null and longer than 50 characters
+   - Must not start with "ERROR" or "No data"
+   - Must contain real data signals (numbers, dollar amounts, percentages, structured fields)
+   - Is checked against the expected output template from SKILL.md
+4. Skills that return real, verifiable data earn the **VERIFIED** badge
+5. Skills that fail live testing are moved to `_archived/`
 
-- **Compilation (6 pts)** -- The code is parsed by the Groovy compiler. Syntax errors fail immediately with 0 points.
-- **Sandbox Run (7 pts)** -- The code is executed in a sandboxed GroovyShell with mock tool responses and realistic parameters. Must complete within 5 seconds.
-- **Output Quality (4 pts)** -- The return value is inspected: it must be non-null, longer than 20 characters, and not start with "ERROR".
-- **Error Path Handling (3 pts)** -- The code is run again with empty parameters. A skill that returns a graceful error message scores full marks; one that crashes scores zero.
+**Only verified skills remain in `skills/`.** The `_assessment.json` for each verified skill contains the full live test record:
 
-#### 2. Runtime Effectiveness (0-15 points)
+```json
+{
+  "liveTest": {
+    "verified": true,
+    "testedAt": "2026-03-28T18:28:33",
+    "executionTimeMs": 224,
+    "outputLength": 14348,
+    "containsRealData": true,
+    "outputMatchesTemplate": true
+  }
+}
+```
+
+## Evaluation Dimensions in Detail
+
+### 1. Execution Test (0-20)
+
+- **Compilation (6 pts)** -- Parsed by the Groovy compiler. Syntax errors = 0 points.
+- **Sandbox Run (7 pts)** -- Executed in a sandboxed GroovyShell with mock tools and realistic parameters. Must complete within 5 seconds.
+- **Output Quality (4 pts)** -- Return value must be non-null, > 20 characters, and not start with "ERROR".
+- **Error Path (3 pts)** -- Re-run with empty parameters. Graceful error message = full marks; crash = 0.
+
+### 2. Runtime Effectiveness (0-15)
 
 Based on historical usage data from `_meta.json`:
 
-| Success Rate | Base Score |
-|-------------|-----------|
-| >= 90% | 12 |
-| >= 75% | 9 |
-| >= 50% | 5 |
-| < 50% | 2 |
-| No usage data | 0 |
+| Success Rate | Score | Volume Bonus (if rate >= 70%) |
+|-------------|-------|-------------------------------|
+| >= 90% | 12 | +3 for 20+ uses, +2 for 10+, +1 for 5+ |
+| >= 75% | 9 | same |
+| >= 50% | 5 | none |
+| < 50% | 2 | none |
+| No usage | 0 | none |
 
-A volume bonus (up to +3) is awarded to skills with high usage counts (20+ uses), but only if the success rate is at least 70%.
+### 3. Code Quality (0-15)
 
-#### 3. Code Quality (0-15 points)
+- **Existing quality score (0-6)** -- From pre-computed documentation, error handling, complexity scores.
+- **Parameter validation (2)** -- Checks for missing/null params before proceeding.
+- **Error handling (2)** -- try/catch, null-safe operators, defensive patterns.
+- **Structured output (2)** -- Formatted return values (string building, template interpolation).
+- **Code substance (2)** -- 40+ lines = full marks. More code = more logic = likely more useful.
+- **No hardcoded secrets (2)** -- Penalty if `api_key`, `apiKey`, or `secret` found.
 
-A combination of the skill's existing quality score and additional static analysis:
+### 4. Test Coverage (0-10)
 
-- **Existing quality score (0-6 pts)** -- Mapped from the skill's pre-computed documentation, error handling, complexity, and output format scores.
-- **Parameter validation (2 pts)** -- Does the code check for missing or null input parameters before proceeding?
-- **Error handling (2 pts)** -- Are there try/catch blocks, null-safe operators (`?.`, `?:`), or other defensive patterns?
-- **Structured output (2 pts)** -- Does the code produce formatted output (string building, template interpolation)?
-- **Code size (1 pt)** -- Skills between 10-80 lines score full marks.
-- **No hardcoded secrets (2 pts)** -- Penalty if `api_key`, `apiKey`, or `secret` patterns are found in the code.
+- **Examples (0-4)** -- 3+ examples = 4 pts, 2 = 3 pts, 1 = 1 pt.
+- **Assertions (3)** -- Explicit `assert`, `assertEquals`, `should`, `expect` statements.
+- **Expected output template (3)** -- Defines what correct output looks like.
 
-#### 4. Test Coverage (0-10 points)
+### 5. Uniqueness (0-10)
 
-The skill's `SKILL.md` is analyzed for examples and test cases:
+Jaccard similarity computed on feature sets (category, tags, code patterns, name tokens) against all group members. Only one in its group = full 10. > 80% similarity to a higher-ranked peer = 0 (redundant).
 
-- **Example count (0-4 pts)** -- At least 2 examples are needed for a meaningful score. Three or more examples earn 4 points.
-- **Assertions (3 pts)** -- Bonus for explicit assertions (`assert`, `assertEquals`, `should`, `expect`).
-- **Expected output template (3 pts)** -- Bonus if the skill defines what correct output looks like.
+### 6. Self-Containment (0-15)
 
-#### 5. Uniqueness (0-10 points)
-
-Measures how distinct a skill is from others in its capability group:
-
-- **Jaccard similarity** is computed between the skill's feature set (category, tags, code patterns, name tokens) and every other skill in its group.
-- A skill that is the only one in its group gets full 10 points.
-- A skill with >80% similarity to a higher-ranked peer gets 0 points (it is redundant).
-- Intermediate similarity scores map to 3 or 7 points.
-
-#### 6. Self-Containment (0-15 points)
-
-Measures whether a skill can run standalone without depending on other skills in the registry. A skill that requires a chain of other skills to function is fragile and not portable.
-
-The code is scanned for `tools.*` calls. Each call is classified as either an **infrastructure tool** (generic utilities like `http_request`, `web_search`, `web_content_extract`) or a **skill dependency** (another skill that must exist in the registry).
+Code is scanned for `tools.*` calls. Each call is classified as infrastructure (`http_request`, `web_search`) or a skill dependency.
 
 | Situation | Score |
 |-----------|-------|
-| No `tools.*` calls at all -- fully self-contained | 15 |
-| Calls only infrastructure tools (HTTP, search) | 10 |
-| Depends on 1-2 other skills | 5 |
-| Deep dependency chain (3+ skill calls) | 0 |
+| No `tools.*` calls -- fully self-contained | 15 |
+| Only infrastructure tools (HTTP, search) | 10 |
+| 1-2 skill dependencies | 5 |
+| 3+ skill dependencies (deep chain) | 0 |
 
-#### 7. Portability (0-15 points)
+### 7. Portability (0-15)
 
-Measures whether a skill is fully portable: can someone drop it into their environment and it just works? Domain-specific skills (finance, medical, legal) are perfectly fine -- what matters is that **all configuration, URLs, and resources needed to run are inside the skill itself**.
+Can someone drop this skill in and it just works?
 
-| Check | Points | What it looks for |
-|-------|--------|-------------------|
-| Inline URLs/endpoints | 3 | If the skill uses HTTP, are the URLs embedded in the code? Or does it assume external config? |
-| Clear input contract | 3 | Are parameters declared, validated, and documented? |
-| Clear output contract | 3 | Does the code have a structured return value? |
-| Complete metadata | 3 | Description, category, tags -- is the skill well-described? |
-| No external state | 3 | No env vars, no local file reads, no database dependencies |
+| Check | Points |
+|-------|--------|
+| URLs/endpoints inline in the code | 3 |
+| Clear input contract (params validated) | 3 |
+| Clear output contract (structured return) | 3 |
+| Complete metadata (description, category, tags) | 3 |
+| No external state (no env vars, files, DB) | 3 |
 
-A finance skill that has its Yahoo Finance URL inline, validates the `ticker` param, and returns structured output scores full marks. A "generic" skill that reads config from env vars and assumes a database connection scores poorly.
+### Live Verification
 
-### Grading Scale
+After scoring, published skills are tested against real APIs:
 
-| Grade | Score Range | Outcome |
-|-------|-----------|---------|
-| A | 90-100 | Published -- exceptional quality |
-| B | 80-89 | Published -- high quality |
-| C | 75-79 | Published -- meets the bar |
-| D | 60-74 | Archived -- below publication standard |
-| F | 0-59 | Archived -- candidate for deletion |
+- Real HTTP requests via `java.net.http.HttpClient`
+- `web_search` queries DuckDuckGo
+- `http_request` fetches actual URLs
+- `web_content_extract` fetches and strips HTML
+- Unknown tools attempt HTTP if args contain a URL, otherwise report the tool as unavailable
+- 30-second timeout per skill
+- Output validated for real data (numbers, dollar amounts, structured fields)
 
-### Grouping and Deduplication
-
-Skills are grouped by capability to prevent redundancy:
-
-1. **Primary grouping by category** -- Skills are first grouped by their declared category (e.g., `data-io`, `computation`, `analysis`).
-2. **Sub-grouping by similarity** -- Large categories are split into sub-groups using Jaccard similarity on feature sets (tags, code patterns, name tokens). Skills with average similarity >= 0.25 to existing group members join that group.
-3. **Stack-ranking** -- Within each group, skills are sorted by total score (descending).
-4. **Top-K selection** -- Only the best K skills per group are published (default: 3). The rest are archived.
-
-### Skill Merging
-
-When multiple high-quality skills (score >= 70) in the same group address overlapping capabilities, the curator can merge them into a single super-skill:
-
-- The highest-scoring skill becomes the **base** implementation.
-- Lower-ranked skills are woven in as **fallback strategies** -- if the base fails, the merged skill automatically tries the next approach.
-- A `_merge_manifest.json` records provenance: which source skills were merged, their scores, and the merge timestamp.
-- Merged skills inherit the combined usage statistics and tags from all source skills.
+Skills that return real, meaningful data earn `[VERIFIED]`. Everything else is archived.
 
 ## Running the Curator
 
@@ -155,17 +154,25 @@ When multiple high-quality skills (score >= 70) in the same group address overla
 # Build
 cd curator && mvn package
 
-# Evaluate all skills (preview only)
+# Preview only (no file changes)
 java --enable-preview -jar curator/target/curator.jar \
   --skills-dir ./skills --top-k 3 --dry-run
 
-# Full run: evaluate, archive losers, merge overlapping, generate CATALOG.md
+# Full evaluation + live test (recommended)
+java --enable-preview -jar curator/target/curator.jar \
+  --skills-dir ./skills --top-k 3 --live-test --test-ticker AAPL
+
+# With dependency inlining for chain-dependent skills
+java --enable-preview -jar curator/target/curator.jar \
+  --skills-dir ./skills --top-k 3 --live-test --inline-deps
+
+# Merge overlapping skills into super-skills
 java --enable-preview -jar curator/target/curator.jar \
   --skills-dir ./skills --top-k 3 --merge
 
-# Commit only published skills to git
+# Commit only verified skills to git
 java --enable-preview -jar curator/target/curator.jar \
-  --skills-dir ./skills --top-k 3 --merge --commit
+  --skills-dir ./skills --top-k 3 --live-test --commit
 ```
 
 ### CLI Options
@@ -175,23 +182,29 @@ java --enable-preview -jar curator/target/curator.jar \
 | `--skills-dir`, `-d` | `.` | Directory containing skill packages |
 | `--top-k`, `-k` | `3` | Number of skills to keep per group |
 | `--output-dir`, `-o` | Parent of skills-dir | Where to write CATALOG.md |
+| `--live-test` | off | Test skills against real APIs. Unverified skills are archived |
+| `--test-ticker` | `AAPL` | Ticker symbol for live testing financial skills |
+| `--inline-deps` | off | Inline dependencies for skills that fail self-containment |
 | `--merge` | off | Merge overlapping skills into super-skills |
 | `--merge-min-group` | `3` | Minimum group size to trigger merging |
-| `--commit` | off | Git commit only published skills |
+| `--commit` | off | Git commit only published/verified skills |
 | `--dry-run` | off | Assess and report only, no file changes |
 
-### Curator Output
+### What the Curator Prints
 
-The curator prints a clear report showing:
+```
+[+] skill_name    80/100 (B)    ← passes quality gate
+[x] skill_name    68/100 (D)    ← rejected (below 75)
 
-- **`[+]`** Publication candidates -- skills that passed the quality gate
-- **`[x]`** Rejected skills -- with specific reasons for failure
-- **Deletion candidates** -- skills scoring below 50 that should be removed entirely
+[VERIFIED] skill_name           ← real API data confirmed
+[FAILED]   skill_name           ← live test failed (archived)
+```
 
 ## Tech Stack
 
 - Java 21 (preview features enabled)
 - Apache Groovy 4.0 (skill execution sandbox)
+- `java.net.http.HttpClient` (live API testing)
 - Picocli (CLI framework)
 - Jackson (JSON parsing)
 - Maven (build + shade plugin for fat jar)

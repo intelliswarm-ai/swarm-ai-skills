@@ -1,7 +1,0 @@
-Financial Metrics for symbol: {{symbol}}
-P/E: {{pe}}
-Revenue Growth: {{revenue_growth}}
-[WARNINGS]
-{{warnings}}
-```
-```

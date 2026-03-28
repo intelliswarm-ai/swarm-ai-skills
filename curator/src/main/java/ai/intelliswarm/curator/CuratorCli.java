@@ -1,16 +1,26 @@
 package ai.intelliswarm.curator;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
+import java.time.LocalDateTime;
+import java.util.*;
 import java.util.concurrent.Callable;
 
 @Command(name = "curator", mixinStandardHelpOptions = true, version = "1.0.0",
         description = "Assess, rank, and curate AI agent skills.")
 public class CuratorCli implements Callable<Integer> {
+
+    private static final ObjectMapper MAPPER = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .enable(SerializationFeature.INDENT_OUTPUT)
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
     @Option(names = {"--skills-dir", "-d"},
             description = "Directory containing skill packages (default: current dir)",
@@ -29,6 +39,15 @@ public class CuratorCli implements Callable<Integer> {
     @Option(names = {"--inline-deps"},
             description = "Try to inline dependencies for skills that fail self-containment")
     private boolean inlineDeps;
+
+    @Option(names = {"--live-test"},
+            description = "Run skills against real APIs — no mocks. Only verified skills are trusted.")
+    private boolean liveTest;
+
+    @Option(names = {"--test-ticker"},
+            description = "Ticker symbol for live testing financial skills (default: AAPL)",
+            defaultValue = "AAPL")
+    private String testTicker;
 
     @Option(names = {"--merge"},
             description = "Merge overlapping skills in large groups into super-skills")
@@ -67,6 +86,84 @@ public class CuratorCli implements Callable<Integer> {
 
             var report = curator.curate(absSkillsDir, absOutputDir, topK);
 
+            // Live test published skills against real APIs
+            if (liveTest) {
+                System.out.println("\n========================================");
+                System.out.println("  LIVE TESTING — real APIs, no mocks");
+                System.out.println("========================================");
+                System.out.printf("Test ticker: %s%n%n", testTicker);
+
+                // Collect published skills
+                var published = new ArrayList<SkillAssessment>();
+                for (var group : report.rankedGroups().values()) {
+                    for (int i = 0; i < Math.min(topK, group.size()); i++) {
+                        if (group.get(i).passesCurationBar()) {
+                            published.add(group.get(i));
+                        }
+                    }
+                }
+
+                var testParams = new HashMap<String, Object>();
+                testParams.put("ticker", testTicker);
+                testParams.put("symbol", testTicker);
+                testParams.put("query", testTicker + " financial data");
+                testParams.put("windowDays", 7);
+
+                var runner = new LiveTestRunner();
+                var results = runner.runLiveTests(published, testParams);
+
+                // Summary
+                int verified = 0, failed = 0;
+                for (var r : results) {
+                    if (r.passed()) verified++;
+                    else failed++;
+                }
+
+                System.out.printf("%n--- Live Test Summary ---%n");
+                System.out.printf("Verified: %d | Failed: %d | Total: %d%n",
+                        verified, failed, results.size());
+
+                // Write badges + archive failed skills
+                if (!dryRun) {
+                    var archivedDir = absSkillsDir.resolve("_archived");
+                    Files.createDirectories(archivedDir);
+
+                    for (var r : results) {
+                        writeVerifiedBadge(absSkillsDir, r);
+                        if (!r.passed()) {
+                            var skillDir = absSkillsDir.resolve(r.slug());
+                            var target = archivedDir.resolve(r.slug());
+                            if (Files.exists(skillDir) && !Files.exists(target)) {
+                                Files.move(skillDir, target);
+                            }
+                        }
+                    }
+                    System.out.printf("%nArchived %d unverified skills to _archived/%n", failed);
+                }
+
+                // Print verified skills
+                if (verified > 0) {
+                    System.out.println("\nVERIFIED SKILLS (real API data confirmed):");
+                    for (var r : results) {
+                        if (r.passed()) {
+                            System.out.printf("  [VERIFIED] %-40s %dms, %d chars%n",
+                                    r.slug(), r.executionTimeMs(), r.outputLength());
+                        }
+                    }
+                }
+                if (failed > 0) {
+                    System.out.println("\nFAILED LIVE TEST:");
+                    for (var r : results) {
+                        if (!r.passed()) {
+                            System.out.printf("  [FAILED]   %-40s %s%n", r.slug(), r.error());
+                            for (var note : r.notes()) {
+                                System.out.printf("             %s%n", note);
+                            }
+                        }
+                    }
+                }
+            }
+
             // Merge overlapping skills
             if (merge && !dryRun) {
                 System.out.println("\n--- Merging overlapping skills ---");
@@ -79,7 +176,7 @@ public class CuratorCli implements Callable<Integer> {
                     System.out.printf("Created %d merged super-skills in skills/_merged/%n",
                             mergeResults.size());
                     for (var r : mergeResults) {
-                        System.out.printf("  %s ← %s%n", r.mergedSlug(),
+                        System.out.printf("  %s <- %s%n", r.mergedSlug(),
                                 String.join(" + ", r.sourceSkills()));
                     }
                 }
@@ -108,6 +205,33 @@ public class CuratorCli implements Callable<Integer> {
             System.err.println("ERROR: " + e.getMessage());
             e.printStackTrace();
             return 1;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void writeVerifiedBadge(Path skillsDir, LiveTestRunner.LiveTestResult result) {
+        try {
+            var assessmentFile = skillsDir.resolve(result.slug()).resolve("_assessment.json");
+            if (!Files.exists(assessmentFile)) return;
+
+            var existing = MAPPER.readValue(assessmentFile.toFile(), Map.class);
+            var updated = new LinkedHashMap<>(existing);
+            updated.put("liveTest", Map.of(
+                    "passed", result.passed(),
+                    "verified", result.passed(),
+                    "testedAt", LocalDateTime.now().toString(),
+                    "executionTimeMs", result.executionTimeMs(),
+                    "outputLength", result.outputLength(),
+                    "outputMatchesTemplate", result.outputMatchesTemplate(),
+                    "containsRealData", result.containsRealData(),
+                    "error", result.error() != null ? result.error() : "",
+                    "notes", result.notes()
+            ));
+
+            MAPPER.writeValue(assessmentFile.toFile(), updated);
+        } catch (Exception e) {
+            System.err.printf("WARN: Could not write verified badge for %s: %s%n",
+                    result.slug(), e.getMessage());
         }
     }
 
