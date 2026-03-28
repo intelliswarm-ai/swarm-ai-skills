@@ -1,0 +1,2 @@
+- https://www.sec.gov/
+- Yahoo Finance JSON structure (as seen in page source)

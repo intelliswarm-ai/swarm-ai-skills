@@ -1,0 +1,25 @@
+{
+  "id" : "5219b181",
+  "slug" : "fetch_and_analyze_financials",
+  "displayName" : "fetch and analyze financials",
+  "status" : "ACTIVE",
+  "skillType" : "CODE",
+  "usageCount" : 3,
+  "successCount" : 3,
+  "createdAt" : "2026-03-28T14:09:37.575058208",
+  "parentSkillId" : null,
+  "latest" : {
+    "version" : "1.0.0",
+    "publishedAt" : 1774707002171
+  },
+  "history" : [ ],
+  "qualityScore" : {
+    "documentation" : 20,
+    "testCoverage" : 15,
+    "errorHandling" : 5,
+    "codeComplexity" : 15,
+    "outputFormat" : 20,
+    "total" : 75,
+    "grade" : "C"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "id" : "bbf9be8d",
+  "slug" : "financial_metrics_calculator_fallback",
+  "displayName" : "financial metrics calculator fallback",
+  "status" : "ACTIVE",
+  "skillType" : "CODE",
+  "usageCount" : 3,
+  "successCount" : 3,
+  "createdAt" : "2026-03-28T14:08:04.154313530",
+  "parentSkillId" : null,
+  "latest" : {
+    "version" : "1.0.1",
+    "publishedAt" : 1774707002737
+  },
+  "history" : [ ],
+  "qualityScore" : {
+    "documentation" : 20,
+    "testCoverage" : 0,
+    "errorHandling" : 20,
+    "codeComplexity" : 20,
+    "outputFormat" : 20,
+    "total" : 80,
+    "grade" : "B"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "strategy" : "chain-with-fallback",
+  "groupName" : "data-io: multi-yahoo",
+  "mergedAt" : "2026-03-28T17:50:13.688436563",
+  "mergedFrom" : [ {
+    "rank" : 1,
+    "score" : 83,
+    "slug" : "multi_tool_yahoo_finance_data_aggregator"
+  }, {
+    "rank" : 2,
+    "score" : 80,
+    "slug" : "robust_backup_data_extractor"
+  }, {
+    "rank" : 3,
+    "score" : 80,
+    "slug" : "robust_financial_data_extractor"
+  } ]
+}

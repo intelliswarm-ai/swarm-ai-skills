@@ -1,0 +1,16 @@
+{
+  "groupName" : "data-io: extract-company",
+  "grade" : "B",
+  "assessedAt" : "2026-03-28T17:50:13.566129761",
+  "passesCurationBar" : true,
+  "rankInGroup" : 2,
+  "assessmentNotes" : [ "Execution: Compilation OK", "Execution: Sandbox run OK", "Execution: Error path handled gracefully", "Effectiveness: 3 uses, 100% success → 20/25", "Code quality: existing=80/100, checks=[no param validation] → 15/20", "Test coverage: 5 examples, assertions=no → 11/15", "Uniqueness: 15/15 (group size=3)" ],
+  "totalScore" : 86,
+  "dimensions" : {
+    "testCoverage" : 11,
+    "codeQuality" : 15,
+    "effectiveness" : 20,
+    "uniqueness" : 15,
+    "execution" : 25
+  }
+}

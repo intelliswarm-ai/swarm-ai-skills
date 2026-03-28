@@ -1,0 +1,25 @@
+{
+  "id" : "4091f9e5",
+  "slug" : "financials_by_ticker_extractor",
+  "displayName" : "financials by ticker extractor",
+  "status" : "ACTIVE",
+  "skillType" : "CODE",
+  "usageCount" : 3,
+  "successCount" : 3,
+  "createdAt" : "2026-03-28T14:08:54.609119839",
+  "parentSkillId" : null,
+  "latest" : {
+    "version" : "1.0.0",
+    "publishedAt" : 1774707002343
+  },
+  "history" : [ ],
+  "qualityScore" : {
+    "documentation" : 20,
+    "testCoverage" : 15,
+    "errorHandling" : 5,
+    "codeComplexity" : 20,
+    "outputFormat" : 20,
+    "total" : 80,
+    "grade" : "B"
+  }
+}

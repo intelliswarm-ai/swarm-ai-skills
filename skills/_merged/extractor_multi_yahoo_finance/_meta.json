@@ -1,0 +1,19 @@
+{
+  "status" : "CURATED",
+  "slug" : "extractor_multi_yahoo_finance",
+  "usageCount" : 21,
+  "displayName" : "extractor multi yahoo finance",
+  "id" : "8557b495",
+  "createdAt" : "2026-03-28T17:50:13.684571232",
+  "skillType" : "CODE",
+  "qualityScore" : {
+    "codeComplexity" : 15,
+    "total" : 90,
+    "testCoverage" : 15,
+    "outputFormat" : 20,
+    "documentation" : 20,
+    "errorHandling" : 20,
+    "grade" : "A"
+  },
+  "successCount" : 21
+}

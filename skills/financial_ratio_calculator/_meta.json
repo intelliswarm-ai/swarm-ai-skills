@@ -1,0 +1,25 @@
+{
+  "id" : "4786da00",
+  "slug" : "financial_ratio_calculator",
+  "displayName" : "financial ratio calculator",
+  "status" : "ACTIVE",
+  "skillType" : "CODE",
+  "usageCount" : 2,
+  "successCount" : 2,
+  "createdAt" : "2026-03-28T14:08:18.245901756",
+  "parentSkillId" : null,
+  "latest" : {
+    "version" : "1.0.0",
+    "publishedAt" : 1774707002275
+  },
+  "history" : [ ],
+  "qualityScore" : {
+    "documentation" : 20,
+    "testCoverage" : 10,
+    "errorHandling" : 15,
+    "codeComplexity" : 15,
+    "outputFormat" : 20,
+    "total" : 80,
+    "grade" : "B"
+  }
+}

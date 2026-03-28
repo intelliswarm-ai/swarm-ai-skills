@@ -1,0 +1,18 @@
+{
+  "strategy" : "chain-with-fallback",
+  "groupName" : "computation",
+  "mergedAt" : "2026-03-28T17:50:13.706306426",
+  "mergedFrom" : [ {
+    "rank" : 1,
+    "score" : 82,
+    "slug" : "fallback_financials_extractor"
+  }, {
+    "rank" : 2,
+    "score" : 82,
+    "slug" : "financial_metrics_calculator_fallback"
+  }, {
+    "rank" : 3,
+    "score" : 80,
+    "slug" : "financial_ratio_calculator"
+  } ]
+}

@@ -1,0 +1,13 @@
+Financial Summary for: {{ticker}}
+Market Cap: {{marketCap}}
+Net Income: {{netIncome}}
+Revenue: {{revenue}}
+Shares Outstanding: {{sharesOutstanding}}
+Share Price: {{price}}
+Enterprise Value: {{ev}}
+EBITDA: {{ebitda}}
+
+Valuation Ratios:
+P/E Ratio: {{pe}}
+P/S Ratio: {{ps}}
+EV/EBITDA: {{evEbitda}}

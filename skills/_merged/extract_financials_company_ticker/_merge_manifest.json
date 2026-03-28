@@ -1,0 +1,18 @@
+{
+  "strategy" : "chain-with-fallback",
+  "groupName" : "data-io: extract-company",
+  "mergedAt" : "2026-03-28T17:50:13.672007279",
+  "mergedFrom" : [ {
+    "rank" : 1,
+    "score" : 92,
+    "slug" : "extract_company_financials_robust"
+  }, {
+    "rank" : 2,
+    "score" : 86,
+    "slug" : "financials_by_ticker_extractor"
+  }, {
+    "rank" : 3,
+    "score" : 81,
+    "slug" : "extract_financial_metrics_with_fallback"
+  } ]
+}

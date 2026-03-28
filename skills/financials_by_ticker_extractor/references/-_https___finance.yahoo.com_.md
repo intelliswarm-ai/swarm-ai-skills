@@ -1,0 +1,1 @@
+- DATA NOT AVAILABLE for SEC direct API tool in this environment.

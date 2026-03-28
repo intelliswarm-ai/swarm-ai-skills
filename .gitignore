@@ -1,0 +1,9 @@
+# IDE
+.idea/
+*.iml
+
+# Claude Code
+.claude/
+
+# Maven
+curator/target/

@@ -1,0 +1,6 @@
+Financial data for: {{symbol}} / {{company}}
+price: {{price}}
+market cap: {{market_cap}}
+eps: {{eps}}
+p/e: {{pe}}
+[Method: Web search fallback. Data may be estimated or outdated. Use with caution.]

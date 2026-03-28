@@ -1,0 +1,25 @@
+{
+  "id" : "f99cfd1e",
+  "slug" : "extract_company_financials_robust",
+  "displayName" : "extract company financials robust",
+  "status" : "PROMOTED",
+  "skillType" : "CODE",
+  "usageCount" : 10,
+  "successCount" : 10,
+  "createdAt" : "2026-03-28T14:08:50.342637282",
+  "parentSkillId" : null,
+  "latest" : {
+    "version" : "1.0.0",
+    "publishedAt" : 1774707002150
+  },
+  "history" : [ ],
+  "qualityScore" : {
+    "documentation" : 20,
+    "testCoverage" : 15,
+    "errorHandling" : 20,
+    "codeComplexity" : 10,
+    "outputFormat" : 20,
+    "total" : 85,
+    "grade" : "B"
+  }
+}

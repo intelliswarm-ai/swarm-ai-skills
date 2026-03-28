@@ -1,0 +1,3 @@
+Financial Summary for {{ticker}}:
+- Price/Earnings (P/E) Ratio: {{peValue}}
+- Revenue Growth: {{revValue}}

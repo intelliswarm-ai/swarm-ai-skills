@@ -1,0 +1,8 @@
+Ticker: {{ticker}}
+Yahoo Finance Page: {{yahoo_url}}
+Current Price: {{price}}
+Market Cap: {{market_cap}}
+Trailing P/E: {{pe_ratio}}
+52-Week Range: {{fifty_two_week_range}}
+Recent SEC Filings:
+{{sec_filings}}

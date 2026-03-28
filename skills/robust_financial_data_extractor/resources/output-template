@@ -1,0 +1,6 @@
+Company: {{ticker}}
+
+{{#each results}}
+=== Source: {{source}} ===
+{{raw}}
+{{/each}}

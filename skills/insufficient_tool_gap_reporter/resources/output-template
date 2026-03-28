@@ -1,0 +1,14 @@
+=== INSUFFICIENT TOOL GAP REPORT ===
+Timestamp: {{timestamp}}
+Requested capability: {{requestedCapability}}
+Input parameters: {{inputParameters}}
+Context: {{context}}
+
+Diagnosis: [CONFIRMED] No suitable tool, skill, or integration was found to fulfill the request.
+
+Suggested actions:
+1. Review the requested capability and verify if it maps to any existing tools or skills.
+2. If this is a new or emerging need, escalate to the skill engineering team for consideration.
+3. Consider alternative workflows or data sources.
+
+Operator note: This report is auto-generated for skill development and diagnostic purposes.
