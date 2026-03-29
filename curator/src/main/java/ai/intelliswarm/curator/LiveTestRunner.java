@@ -68,6 +68,17 @@ public class LiveTestRunner {
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
 
+    public record ApiCallTrace(
+            String toolName,
+            String method,
+            String url,
+            Map<String, Object> params,
+            int responseLength,
+            String responseSnippet,
+            boolean success,
+            long durationMs
+    ) {}
+
     public record LiveTestResult(
             String slug,
             boolean passed,
@@ -78,7 +89,8 @@ public class LiveTestRunner {
             long executionTimeMs,
             String error,
             List<String> notes,
-            Map<String, Object> testParams
+            Map<String, Object> testParams,
+            List<ApiCallTrace> apiCallTraces
     ) {}
 
     /**
@@ -274,9 +286,10 @@ public class LiveTestRunner {
         notes.add("Test params: " + summarizeParams(testParams));
 
         long startTime = System.currentTimeMillis();
+        var toolProxy = new RealToolProxy(httpClient);
         Object result;
         try {
-            result = runWithRealTools(skill, testParams);
+            result = runWithRealTools(skill, testParams, toolProxy);
         } catch (TimeoutException e) {
             return fail(skill.slug(), "Timeout (>%dms)".formatted(SKILL_TIMEOUT_MS), notes, testParams);
         } catch (Exception e) {
@@ -284,19 +297,32 @@ public class LiveTestRunner {
         }
         long elapsed = System.currentTimeMillis() - startTime;
 
+        // Collect API call traces from the proxy
+        var apiTraces = toolProxy.getTraces();
+        if (!apiTraces.isEmpty()) {
+            notes.add("API calls made: %d".formatted(apiTraces.size()));
+            for (var trace : apiTraces) {
+                notes.add("  → %s [%s] %s (%dms, %d chars, %s)".formatted(
+                        trace.toolName(), trace.method(),
+                        trace.url().length() > 80 ? trace.url().substring(0, 80) + "..." : trace.url(),
+                        trace.durationMs(), trace.responseLength(),
+                        trace.success() ? "OK" : "FAIL"));
+            }
+        }
+
         if (result == null) {
-            return fail(skill.slug(), "Returned null", elapsed, notes, testParams);
+            return fail(skill.slug(), "Returned null", elapsed, notes, testParams, apiTraces);
         }
         var output = result.toString().trim();
         if (output.isEmpty()) {
-            return fail(skill.slug(), "Empty output", elapsed, notes, testParams);
+            return fail(skill.slug(), "Empty output", elapsed, notes, testParams, apiTraces);
         }
         notes.add("Output length: %d chars".formatted(output.length()));
 
         if (output.toUpperCase().startsWith("ERROR") || output.toUpperCase().startsWith("NO ")) {
             return fail(skill.slug(),
                     "Error output: " + output.substring(0, Math.min(100, output.length())),
-                    elapsed, notes, testParams);
+                    elapsed, notes, testParams, apiTraces);
         }
 
         boolean matchesTemplate = validateOutputTemplate(skill, output, notes);
@@ -312,13 +338,14 @@ public class LiveTestRunner {
 
         return new LiveTestResult(
                 skill.slug(), passed, output, output.length(),
-                matchesTemplate, hasRealData, elapsed, null, notes, testParams);
+                matchesTemplate, hasRealData, elapsed, null, notes, testParams, apiTraces);
     }
 
-    private Object runWithRealTools(SkillPackage skill, Map<String, Object> params) throws Exception {
+    private Object runWithRealTools(SkillPackage skill, Map<String, Object> params,
+                                     RealToolProxy toolProxy) throws Exception {
         var binding = new Binding();
         binding.setVariable("params", new HashMap<>(params));
-        binding.setVariable("tools", new RealToolProxy(httpClient));
+        binding.setVariable("tools", toolProxy);
 
         var shell = new GroovyShell(binding);
         var resultHolder = new Object[1];
@@ -399,12 +426,18 @@ public class LiveTestRunner {
 
     private LiveTestResult fail(String slug, String error, List<String> notes,
                                  Map<String, Object> params) {
-        return new LiveTestResult(slug, false, null, 0, false, false, 0, error, notes, params);
+        return new LiveTestResult(slug, false, null, 0, false, false, 0, error, notes, params, List.of());
     }
 
     private LiveTestResult fail(String slug, String error, long elapsed,
                                  List<String> notes, Map<String, Object> params) {
-        return new LiveTestResult(slug, false, null, 0, false, false, elapsed, error, notes, params);
+        return new LiveTestResult(slug, false, null, 0, false, false, elapsed, error, notes, params, List.of());
+    }
+
+    private LiveTestResult fail(String slug, String error, long elapsed,
+                                 List<String> notes, Map<String, Object> params,
+                                 List<ApiCallTrace> traces) {
+        return new LiveTestResult(slug, false, null, 0, false, false, elapsed, error, notes, params, traces);
     }
 
     private String firstLine(String msg) {
@@ -419,26 +452,35 @@ public class LiveTestRunner {
 
     public static class RealToolProxy extends groovy.util.Proxy {
         private final HttpClient httpClient;
+        private final List<ApiCallTrace> traces = Collections.synchronizedList(new ArrayList<>());
 
         public RealToolProxy(HttpClient httpClient) {
             this.httpClient = httpClient;
         }
 
+        public List<ApiCallTrace> getTraces() {
+            return new ArrayList<>(traces);
+        }
+
         @Override
         public Object getProperty(String name) {
             return switch (name) {
-                case "http_request" -> new HttpRequestTool(httpClient);
-                case "web_search" -> new WebSearchTool(httpClient);
-                case "web_content_extract" -> new WebContentExtractTool(httpClient);
-                default -> new FallbackTool(name, httpClient);
+                case "http_request" -> new HttpRequestTool(httpClient, traces);
+                case "web_search" -> new WebSearchTool(httpClient, traces);
+                case "web_content_extract" -> new WebContentExtractTool(httpClient, traces);
+                default -> new FallbackTool(name, httpClient, traces);
             };
         }
 
         public static class HttpRequestTool {
             private final HttpClient client;
-            HttpRequestTool(HttpClient client) { this.client = client; }
+            private final List<ApiCallTrace> traces;
+            HttpRequestTool(HttpClient client, List<ApiCallTrace> traces) {
+                this.client = client; this.traces = traces;
+            }
 
             public String execute(Object args) {
+                long start = System.currentTimeMillis();
                 try {
                     var params = asMap(args);
                     var url = params.getOrDefault("url", "").toString();
@@ -456,8 +498,17 @@ public class LiveTestRunner {
                                     params.getOrDefault("body", "").toString())).build()
                             : builder.GET().build();
 
-                    return client.send(request, HttpResponse.BodyHandlers.ofString()).body();
+                    var response = client.send(request, HttpResponse.BodyHandlers.ofString()).body();
+                    long elapsed = System.currentTimeMillis() - start;
+                    traces.add(new ApiCallTrace("http_request", method, url, params,
+                            response.length(), snippet(response), true, elapsed));
+                    return response;
                 } catch (Exception e) {
+                    long elapsed = System.currentTimeMillis() - start;
+                    var params = asMap(args);
+                    traces.add(new ApiCallTrace("http_request", "GET",
+                            params.getOrDefault("url", "").toString(), params,
+                            0, e.getMessage(), false, elapsed));
                     return "ERROR: HTTP request failed: " + e.getMessage();
                 }
             }
@@ -465,9 +516,13 @@ public class LiveTestRunner {
 
         public static class WebSearchTool {
             private final HttpClient client;
-            WebSearchTool(HttpClient client) { this.client = client; }
+            private final List<ApiCallTrace> traces;
+            WebSearchTool(HttpClient client, List<ApiCallTrace> traces) {
+                this.client = client; this.traces = traces;
+            }
 
             public String execute(Object args) {
+                long start = System.currentTimeMillis();
                 try {
                     var params = asMap(args);
                     var query = params.getOrDefault("query", "").toString();
@@ -482,8 +537,15 @@ public class LiveTestRunner {
                             .header("User-Agent", "SkillCurator/1.0")
                             .GET().build();
 
-                    return client.send(request, HttpResponse.BodyHandlers.ofString()).body();
+                    var response = client.send(request, HttpResponse.BodyHandlers.ofString()).body();
+                    long elapsed = System.currentTimeMillis() - start;
+                    traces.add(new ApiCallTrace("web_search", "GET", url, params,
+                            response.length(), snippet(response), true, elapsed));
+                    return response;
                 } catch (Exception e) {
+                    long elapsed = System.currentTimeMillis() - start;
+                    traces.add(new ApiCallTrace("web_search", "GET", "duckduckgo",
+                            asMap(args), 0, e.getMessage(), false, elapsed));
                     return "ERROR: Web search failed: " + e.getMessage();
                 }
             }
@@ -491,9 +553,13 @@ public class LiveTestRunner {
 
         public static class WebContentExtractTool {
             private final HttpClient client;
-            WebContentExtractTool(HttpClient client) { this.client = client; }
+            private final List<ApiCallTrace> traces;
+            WebContentExtractTool(HttpClient client, List<ApiCallTrace> traces) {
+                this.client = client; this.traces = traces;
+            }
 
             public String execute(Object args) {
+                long start = System.currentTimeMillis();
                 try {
                     var params = asMap(args);
                     var url = params.getOrDefault("url", "").toString();
@@ -512,8 +578,16 @@ public class LiveTestRunner {
                             .replaceAll("<[^>]+>", " ")
                             .replaceAll("\\s+", " ")
                             .trim();
-                    return body.substring(0, Math.min(body.length(), 10000));
+                    var extracted = body.substring(0, Math.min(body.length(), 10000));
+                    long elapsed = System.currentTimeMillis() - start;
+                    traces.add(new ApiCallTrace("web_content_extract", "GET", url, params,
+                            extracted.length(), snippet(extracted), true, elapsed));
+                    return extracted;
                 } catch (Exception e) {
+                    long elapsed = System.currentTimeMillis() - start;
+                    traces.add(new ApiCallTrace("web_content_extract", "GET",
+                            asMap(args).getOrDefault("url", "").toString(),
+                            asMap(args), 0, e.getMessage(), false, elapsed));
                     return "ERROR: Content extraction failed: " + e.getMessage();
                 }
             }
@@ -522,9 +596,13 @@ public class LiveTestRunner {
         public static class FallbackTool {
             private final String name;
             private final HttpClient client;
-            FallbackTool(String name, HttpClient client) { this.name = name; this.client = client; }
+            private final List<ApiCallTrace> traces;
+            FallbackTool(String name, HttpClient client, List<ApiCallTrace> traces) {
+                this.name = name; this.client = client; this.traces = traces;
+            }
 
             public String execute(Object args) {
+                long start = System.currentTimeMillis();
                 var params = asMap(args);
                 for (var value : params.values()) {
                     var val = value.toString();
@@ -535,14 +613,29 @@ public class LiveTestRunner {
                                     .timeout(HTTP_TIMEOUT)
                                     .header("User-Agent", "SkillCurator/1.0")
                                     .GET().build();
-                            return client.send(request, HttpResponse.BodyHandlers.ofString()).body();
+                            var response = client.send(request, HttpResponse.BodyHandlers.ofString()).body();
+                            long elapsed = System.currentTimeMillis() - start;
+                            traces.add(new ApiCallTrace(name, "GET", val, params,
+                                    response.length(), snippet(response), true, elapsed));
+                            return response;
                         } catch (Exception e) {
+                            long elapsed = System.currentTimeMillis() - start;
+                            traces.add(new ApiCallTrace(name, "GET", val, params,
+                                    0, e.getMessage(), false, elapsed));
                             return "ERROR: Tool '%s' fetch failed: %s".formatted(name, e.getMessage());
                         }
                     }
                 }
+                long elapsed = System.currentTimeMillis() - start;
+                traces.add(new ApiCallTrace(name, "N/A", "N/A", params,
+                        0, "Tool not available", false, elapsed));
                 return "ERROR: Tool '%s' is not available in live test mode".formatted(name);
             }
+        }
+
+        private static String snippet(String text) {
+            if (text == null) return "";
+            return text.length() > 200 ? text.substring(0, 200) + "..." : text;
         }
 
         @SuppressWarnings("unchecked")

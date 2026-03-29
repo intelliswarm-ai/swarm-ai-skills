@@ -62,6 +62,15 @@ public class CuratorCli implements Callable<Integer> {
             description = "Git commit only the published (passing) skills")
     private boolean commit;
 
+    @Option(names = {"--llm-judge"},
+            description = "Run LLM-as-judge evaluation on published skills (requires curator.yaml + .env)")
+    private boolean llmJudge;
+
+    @Option(names = {"--config", "-c"},
+            description = "Path to curator.yaml config file (default: ./curator.yaml)",
+            defaultValue = "curator.yaml")
+    private Path configFile;
+
     @Option(names = {"--dry-run"},
             description = "Assess and report only — don't archive or move files")
     private boolean dryRun;
@@ -171,6 +180,74 @@ public class CuratorCli implements Callable<Integer> {
                 }
             }
 
+            // LLM-as-judge evaluation
+            if (llmJudge) {
+                System.out.println("\n========================================");
+                System.out.println("  LLM-AS-JUDGE EVALUATION");
+                System.out.println("========================================");
+
+                try {
+                    var absConfigFile = configFile.toAbsolutePath();
+                    var judgeConfig = LlmJudgeConfig.load(absConfigFile);
+                    System.out.printf("Provider: %s | Model: %s%n", judgeConfig.provider(), judgeConfig.model());
+                    System.out.printf("Temperature: %.1f | Max tokens: %d%n%n",
+                            judgeConfig.temperature(), judgeConfig.maxTokens());
+
+                    var judge = new LlmJudge(judgeConfig);
+
+                    // Collect published skills for evaluation
+                    var publishedForJudge = new ArrayList<SkillAssessment>();
+                    for (var group : report.rankedGroups().values()) {
+                        for (int i = 0; i < Math.min(topK, group.size()); i++) {
+                            if (group.get(i).passesCurationBar()) {
+                                publishedForJudge.add(group.get(i));
+                            }
+                        }
+                    }
+
+                    // Collect live test results if available
+                    List<LiveTestRunner.LiveTestResult> liveResultsForJudge = liveTest ? collectLiveResults(
+                            publishedForJudge, report, absSkillsDir) : null;
+
+                    var evaluations = judge.evaluateAll(publishedForJudge, liveResultsForJudge);
+
+                    // Print summary
+                    System.out.println("\n--- LLM Judge Summary ---");
+                    for (var eval : evaluations) {
+                        System.out.printf("  %-40s  %3d/100 (%s)  \"%s\"%n",
+                                eval.skillSlug(), eval.overallScore(), eval.gradeFor(), eval.verdict());
+                        System.out.printf("    Definition: %d/10  API Calls: %d/10  Response: %d/10  Output: %d/10  Useful: %d/10%n",
+                                eval.toolDefinitionAccuracy(), eval.apiCallQuality(),
+                                eval.responseHandling(), eval.outputQuality(), eval.usefulnessScore());
+                        if (!eval.strengths().isEmpty()) {
+                            System.out.printf("    Strengths: %s%n", String.join("; ", eval.strengths()));
+                        }
+                        if (!eval.weaknesses().isEmpty()) {
+                            System.out.printf("    Weaknesses: %s%n", String.join("; ", eval.weaknesses()));
+                        }
+                    }
+
+                    // Write evaluations to _assessment.json
+                    if (!dryRun) {
+                        for (var eval : evaluations) {
+                            writeLlmEvaluation(absSkillsDir, eval);
+                        }
+                        System.out.printf("%nLLM evaluations written to _assessment.json for %d skills%n",
+                                evaluations.size());
+
+                        // Write detailed evaluation reports
+                        for (var eval : evaluations) {
+                            writeLlmReport(absSkillsDir, eval);
+                        }
+                        System.out.println("Detailed evaluation reports written to _llm_evaluation.md");
+                    }
+
+                } catch (Exception e) {
+                    System.err.println("LLM Judge ERROR: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }
+
             // Merge overlapping skills
             if (merge && !dryRun) {
                 System.out.println("\n--- Merging overlapping skills ---");
@@ -234,6 +311,25 @@ public class CuratorCli implements Callable<Integer> {
             liveTestData.put("testParams", result.testParams());
             liveTestData.put("error", result.error() != null ? result.error() : "");
             liveTestData.put("notes", result.notes());
+
+            // Include API call traces for transparency
+            if (result.apiCallTraces() != null && !result.apiCallTraces().isEmpty()) {
+                var traceMaps = new ArrayList<Map<String, Object>>();
+                for (var trace : result.apiCallTraces()) {
+                    traceMaps.add(Map.of(
+                            "toolName", trace.toolName(),
+                            "method", trace.method(),
+                            "url", trace.url(),
+                            "params", trace.params(),
+                            "responseLength", trace.responseLength(),
+                            "responseSnippet", trace.responseSnippet(),
+                            "success", trace.success(),
+                            "durationMs", trace.durationMs()
+                    ));
+                }
+                liveTestData.put("apiCallTraces", traceMaps);
+            }
+
             updated.put("liveTest", liveTestData);
 
             MAPPER.writeValue(assessmentFile.toFile(), updated);
@@ -300,6 +396,95 @@ public class CuratorCli implements Callable<Integer> {
             System.out.println("\nCATALOG.md regenerated with only verified skills.");
         } catch (Exception e) {
             System.err.println("WARN: Could not regenerate CATALOG.md: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Re-run live tests to collect results for LLM judge (if live test was also run).
+     * In practice, we read the already-written _assessment.json liveTest data.
+     */
+    private List<LiveTestRunner.LiveTestResult> collectLiveResults(
+            List<SkillAssessment> published, CurationReport report, Path skillsDir) {
+        // Re-run live tests to get fresh results for the judge
+        var testParams = new HashMap<String, Object>();
+        testParams.put("ticker", testTicker);
+        testParams.put("symbol", testTicker);
+        testParams.put("query", testTicker + " financial data");
+        testParams.put("windowDays", 7);
+
+        System.out.println("  (Re-running live tests to capture API call traces for LLM judge)");
+        var runner = new LiveTestRunner();
+        return runner.runLiveTests(published, testParams);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void writeLlmEvaluation(Path skillsDir, LlmEvaluation eval) {
+        try {
+            var assessmentFile = skillsDir.resolve(eval.skillSlug()).resolve("_assessment.json");
+            if (!Files.exists(assessmentFile)) return;
+
+            var existing = MAPPER.readValue(assessmentFile.toFile(), Map.class);
+            var updated = new LinkedHashMap<>(existing);
+            updated.put("llmEvaluation", eval.toMap());
+
+            MAPPER.writeValue(assessmentFile.toFile(), updated);
+        } catch (Exception e) {
+            System.err.printf("WARN: Could not write LLM evaluation for %s: %s%n",
+                    eval.skillSlug(), e.getMessage());
+        }
+    }
+
+    private void writeLlmReport(Path skillsDir, LlmEvaluation eval) {
+        try {
+            var reportFile = skillsDir.resolve(eval.skillSlug()).resolve("_llm_evaluation.md");
+
+            var sb = new StringBuilder();
+            sb.append("# LLM Evaluation Report: %s\n\n".formatted(eval.skillSlug()));
+            sb.append("> Evaluated by **%s** on %s (%dms)\n\n".formatted(
+                    eval.model(), eval.evaluatedAt(), eval.evaluationTimeMs()));
+
+            sb.append("## Verdict\n\n");
+            sb.append("**%s** — Overall Score: **%d/100** (Grade: %s)\n\n".formatted(
+                    eval.verdict(), eval.overallScore(), eval.gradeFor()));
+
+            sb.append("## Scores\n\n");
+            sb.append("| Dimension | Score | Weight |\n");
+            sb.append("|-----------|-------|--------|\n");
+            sb.append("| Tool Definition Accuracy | %d/10 | 15%% |\n".formatted(eval.toolDefinitionAccuracy()));
+            sb.append("| API Call Quality | %d/10 | 25%% |\n".formatted(eval.apiCallQuality()));
+            sb.append("| Response Handling | %d/10 | 20%% |\n".formatted(eval.responseHandling()));
+            sb.append("| Output Quality | %d/10 | 20%% |\n".formatted(eval.outputQuality()));
+            sb.append("| Usefulness | %d/10 | 20%% |\n\n".formatted(eval.usefulnessScore()));
+
+            sb.append("## Tool Definition Analysis\n\n%s\n\n".formatted(eval.definitionAnalysis()));
+            sb.append("## API Call Analysis\n\n%s\n\n".formatted(eval.apiCallAnalysis()));
+            sb.append("## Response Handling Analysis\n\n%s\n\n".formatted(eval.responseAnalysis()));
+            sb.append("## Output Quality Analysis\n\n%s\n\n".formatted(eval.outputAnalysis()));
+            sb.append("## Usefulness Analysis\n\n%s\n\n".formatted(eval.usefulnessAnalysis()));
+
+            if (!eval.strengths().isEmpty()) {
+                sb.append("## Strengths\n\n");
+                for (var s : eval.strengths()) sb.append("- %s\n".formatted(s));
+                sb.append("\n");
+            }
+
+            if (!eval.weaknesses().isEmpty()) {
+                sb.append("## Weaknesses\n\n");
+                for (var w : eval.weaknesses()) sb.append("- %s\n".formatted(w));
+                sb.append("\n");
+            }
+
+            if (!eval.recommendations().isEmpty()) {
+                sb.append("## Recommendations\n\n");
+                for (int i = 0; i < eval.recommendations().size(); i++) {
+                    sb.append("%d. %s\n".formatted(i + 1, eval.recommendations().get(i)));
+                }
+            }
+
+            Files.writeString(reportFile, sb.toString());
+        } catch (Exception e) {
+            System.err.printf("WARN: Could not write LLM report for %s: %s%n",
+                    eval.skillSlug(), e.getMessage());
         }
     }
 

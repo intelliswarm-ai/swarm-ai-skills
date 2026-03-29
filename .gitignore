@@ -11,5 +11,9 @@ _merged/
 skills/_merged/
 skills/_archived/
 
+# Secrets
+.env
+curator/.env
+
 # Maven
 curator/target/

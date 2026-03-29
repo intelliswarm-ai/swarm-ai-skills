@@ -1,0 +1,39 @@
+# ============================================================
+# Skill Curator — LLM Judge Configuration
+# ============================================================
+# The LLM-as-judge evaluates each auto-created tool by:
+#   1. Analysing the tool definition (SKILL.md) vs actual behaviour
+#   2. Evaluating API calls: how the tool calls external APIs
+#      and what it receives back as responses
+#   3. Scoring tool definition accuracy and usefulness
+#
+# API keys should be set in .env (never committed to git).
+# ============================================================
+
+llm:
+  # Provider: "anthropic" or "openai"
+  provider: anthropic
+
+  # Model identifier
+  #   Anthropic: claude-sonnet-4-20250514, claude-opus-4-20250514, claude-haiku-4-5-20251001
+  #   OpenAI:    gpt-4o, gpt-4o-mini, o3-mini
+  model: claude-sonnet-4-20250514
+
+  # Maximum tokens for the judge response
+  maxTokens: 4096
+
+  # Temperature (0.0 = deterministic, 1.0 = creative)
+  # Lower is better for evaluation tasks
+  temperature: 0.2
+
+  # API base URL override (optional — leave blank for defaults)
+  #   Anthropic default: https://api.anthropic.com
+  #   OpenAI default:    https://api.openai.com
+  baseUrl: ""
+
+curator:
+  # Minimum score (0-100) for a skill to be published
+  publicationBar: 75
+
+  # How many skills to keep per capability group
+  topK: 3

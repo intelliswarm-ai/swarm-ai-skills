@@ -2,7 +2,7 @@
 
 A curated repository of AI agent skills for the [IntelliSwarm](https://github.com/intelliswarm-ai/swarm-ai) framework.
 
-Only skills that pass both a strict automated quality gate **and** live verification against real APIs are published here. Everything else is archived.
+Only skills that pass a strict automated quality gate, live verification against real APIs, **and** an LLM-as-judge evaluation are published here. Everything else is archived.
 
 ## Repository Structure
 
@@ -12,6 +12,9 @@ swarm-ai-skills/
 ├── skills/                 # Only VERIFIED skill packages live here
 │   └── _archived/          # Skills that failed curation or live testing
 └── curator/                # The SkillCurator CLI tool (Java 21 + Groovy)
+    ├── curator.yaml        # LLM judge configuration (provider, model, params)
+    ├── .env.example        # Template for API keys
+    └── src/                # Source code
 ```
 
 Each skill package contains:
@@ -20,11 +23,12 @@ Each skill package contains:
 |------|---------|
 | `SKILL.md` | Skill definition: description, Groovy code, examples, output template |
 | `_meta.json` | Metadata: usage stats, quality scores, version history |
-| `_assessment.json` | Curator's full assessment: scores, grade, group rank, live test results |
+| `_assessment.json` | Full assessment: structural scores, live test results, API call traces, LLM evaluation |
+| `_llm_evaluation.md` | Detailed LLM judge report: analysis of definition, API calls, responses, usefulness |
 
 ## How Skills Get Published
 
-A skill must pass **two stages** before it appears in this repository.
+A skill must pass **three stages** before it appears in this repository.
 
 ### Stage 1: Automated Quality Gate (75/100 minimum)
 
@@ -48,15 +52,16 @@ Skills that pass Stage 1 are then tested against **real APIs with no mocks**:
 
 1. The skill's Groovy code runs in a sandbox with real HTTP tools (not mock placeholders)
 2. Infrastructure tools (`web_search`, `http_request`, `web_content_extract`) make actual network requests
-3. The output is validated:
+3. **Every API call is traced** -- tool name, HTTP method, URL, parameters, response length, response snippet, duration, and success/failure are recorded
+4. The output is validated:
    - Must be non-null and longer than 50 characters
    - Must not start with "ERROR" or "No data"
    - Must contain real data signals (numbers, dollar amounts, percentages, structured fields)
    - Is checked against the expected output template from SKILL.md
-4. Skills that return real, verifiable data earn the **VERIFIED** badge
-5. Skills that fail live testing are moved to `_archived/`
+5. Skills that return real, verifiable data earn the **VERIFIED** badge
+6. Skills that fail live testing are moved to `_archived/`
 
-**Only verified skills remain in `skills/`.** The `_assessment.json` for each verified skill contains the full live test record:
+**Only verified skills remain in `skills/`.** The `_assessment.json` for each verified skill contains the full live test record including API call traces:
 
 ```json
 {
@@ -66,10 +71,75 @@ Skills that pass Stage 1 are then tested against **real APIs with no mocks**:
     "executionTimeMs": 224,
     "outputLength": 14348,
     "containsRealData": true,
-    "outputMatchesTemplate": true
+    "outputMatchesTemplate": true,
+    "apiCallTraces": [
+      {
+        "toolName": "web_search",
+        "method": "GET",
+        "url": "https://html.duckduckgo.com/html/?q=AAPL+stock+summary",
+        "responseLength": 12480,
+        "success": true,
+        "durationMs": 312
+      }
+    ]
   }
 }
 ```
+
+### Stage 3: LLM-as-Judge Evaluation
+
+Skills that pass live verification are submitted to an LLM judge for deep qualitative analysis. The judge receives the full skill context -- definition, code, API call traces with response data, and the actual output -- and produces a structured evaluation.
+
+#### Five Evaluation Dimensions
+
+| Dimension | Weight | What the LLM Evaluates |
+|-----------|--------|----------------------|
+| Tool Definition Accuracy | 15% | Does SKILL.md (description, triggerWhen, avoidWhen, tags, output template) accurately describe what the code actually does? |
+| API Call Quality | 25% | Are the right APIs/endpoints called? Are query parameters correctly constructed? Is the call pattern efficient? Are there unnecessary or redundant calls? |
+| Response Handling | 20% | Does the code correctly parse API responses? Handle errors, missing fields, unexpected formats? Is there fallback logic? |
+| Output Quality | 20% | Is the final output useful, well-structured, and complete? Does it match the output template? Would a user be satisfied? |
+| Usefulness | 20% | Would a real user benefit from this tool? Is it better than manual alternatives? Can it be relied on? |
+
+Each dimension is scored 0-10 by the LLM, then weighted to produce an overall score (0-100).
+
+#### What the Judge Sees
+
+The evaluation prompt includes everything needed for a thorough assessment:
+
+- **Full SKILL.md** -- the complete tool definition, code, and documentation
+- **Metadata** -- category, tags, usage statistics, success rates
+- **Structural assessment scores** -- all 7 automated dimension scores with notes
+- **API call traces** -- every external HTTP call with URL, parameters, response snippets, timing, and success/failure
+- **Actual output** -- the real output produced during live testing
+
+This allows the judge to evaluate not just the code in isolation, but how it actually behaves when calling real APIs and what it produces.
+
+#### Evaluation Output
+
+Each evaluated skill gets two outputs:
+
+**`_assessment.json`** -- the `llmEvaluation` section is added alongside existing scores:
+
+```json
+{
+  "llmEvaluation": {
+    "scores": {
+      "toolDefinitionAccuracy": 7,
+      "apiCallQuality": 6,
+      "responseHandling": 5,
+      "outputQuality": 7,
+      "usefulnessScore": 6,
+      "overall": 62
+    },
+    "verdict": "Useful but fragile — regex parsing breaks on format changes",
+    "strengths": ["Multi-source data aggregation", "Good error messages"],
+    "weaknesses": ["Regex-based HTML parsing is brittle"],
+    "recommendations": ["Use structured API endpoints instead of scraping"]
+  }
+}
+```
+
+**`_llm_evaluation.md`** -- a detailed human-readable report with multi-paragraph analyses for each dimension, plus actionable recommendations
 
 ## Evaluation Dimensions in Detail
 
@@ -143,10 +213,59 @@ After scoring, published skills are tested against real APIs:
 - `http_request` fetches actual URLs
 - `web_content_extract` fetches and strips HTML
 - Unknown tools attempt HTTP if args contain a URL, otherwise report the tool as unavailable
+- **Every API call is traced** with full request/response metadata
 - 30-second timeout per skill
 - Output validated for real data (numbers, dollar amounts, structured fields)
 
 Skills that return real, meaningful data earn `[VERIFIED]`. Everything else is archived.
+
+## Configuration
+
+### LLM Judge Setup
+
+The LLM-as-judge requires an API key and a configuration file.
+
+**1. Create your `.env` file:**
+
+```bash
+cp curator/.env.example curator/.env
+# Edit curator/.env and add your API key
+```
+
+The `.env` file holds your API key (never committed to git):
+
+```env
+# Anthropic (default)
+ANTHROPIC_API_KEY=sk-ant-api03-...
+
+# Or OpenAI
+# OPENAI_API_KEY=sk-...
+```
+
+API keys are resolved in order: `.env` file, then system environment variables.
+
+**2. Configure the model in `curator.yaml`:**
+
+```yaml
+llm:
+  provider: anthropic          # "anthropic" or "openai"
+  model: claude-sonnet-4-20250514   # Model identifier
+  maxTokens: 4096             # Max tokens for judge response
+  temperature: 0.2            # Lower = more deterministic
+
+curator:
+  publicationBar: 75           # Minimum score for publication
+  topK: 3                     # Skills to keep per group
+```
+
+Supported providers and models:
+
+| Provider | Models |
+|----------|--------|
+| `anthropic` | `claude-sonnet-4-20250514`, `claude-opus-4-20250514`, `claude-haiku-4-5-20251001` |
+| `openai` | `gpt-4o`, `gpt-4o-mini`, `o3-mini` |
+
+You can also set `baseUrl` in `curator.yaml` to point to a custom API endpoint (e.g., a proxy or local model server).
 
 ## Running the Curator
 
@@ -162,6 +281,14 @@ java --enable-preview -jar curator/target/curator.jar \
 java --enable-preview -jar curator/target/curator.jar \
   --skills-dir ./skills --top-k 3 --live-test --test-ticker AAPL
 
+# Full pipeline: quality gate + live test + LLM judge
+java --enable-preview -jar curator/target/curator.jar \
+  --skills-dir ./skills --top-k 3 --live-test --llm-judge
+
+# LLM judge with custom config path
+java --enable-preview -jar curator/target/curator.jar \
+  --skills-dir ./skills --live-test --llm-judge --config /path/to/curator.yaml
+
 # With dependency inlining for chain-dependent skills
 java --enable-preview -jar curator/target/curator.jar \
   --skills-dir ./skills --top-k 3 --live-test --inline-deps
@@ -173,6 +300,10 @@ java --enable-preview -jar curator/target/curator.jar \
 # Commit only verified skills to git
 java --enable-preview -jar curator/target/curator.jar \
   --skills-dir ./skills --top-k 3 --live-test --commit
+
+# Everything at once: live test + LLM judge + commit
+java --enable-preview -jar curator/target/curator.jar \
+  --skills-dir ./skills --live-test --llm-judge --commit
 ```
 
 ### CLI Options
@@ -184,6 +315,8 @@ java --enable-preview -jar curator/target/curator.jar \
 | `--output-dir`, `-o` | Parent of skills-dir | Where to write CATALOG.md |
 | `--live-test` | off | Test skills against real APIs. Unverified skills are archived |
 | `--test-ticker` | `AAPL` | Ticker symbol for live testing financial skills |
+| `--llm-judge` | off | Run LLM-as-judge evaluation (requires `curator.yaml` + `.env`) |
+| `--config`, `-c` | `curator.yaml` | Path to curator.yaml config file |
 | `--inline-deps` | off | Inline dependencies for skills that fail self-containment |
 | `--merge` | off | Merge overlapping skills into super-skills |
 | `--merge-min-group` | `3` | Minimum group size to trigger merging |
@@ -200,11 +333,39 @@ java --enable-preview -jar curator/target/curator.jar \
 [FAILED]   skill_name           ← live test failed (archived)
 ```
 
+With `--llm-judge` enabled, the output also includes:
+
+```
+========================================
+  LLM-AS-JUDGE EVALUATION
+========================================
+Provider: anthropic | Model: claude-sonnet-4-20250514
+Temperature: 0.2 | Max tokens: 4096
+
+  LLM JUDGE: fetch_financial_data                ... DONE (8234ms) — 62/100 "Useful but fragile"
+    Definition: 7/10  API Calls: 6/10  Response: 5/10  Output: 7/10  Useful: 6/10
+    Strengths: Multi-source data; Good error messages
+    Weaknesses: Brittle regex parsing; No API rate limiting
+```
+
+### Pipeline Stages
+
+The curator runs stages in sequence. Each stage is opt-in:
+
+```
+Scan → Assess (always) → Inline Deps (--inline-deps) → Group & Rank (always)
+    → Live Test (--live-test) → LLM Judge (--llm-judge)
+    → Merge (--merge) → Git Commit (--commit)
+```
+
+The `--llm-judge` flag works best combined with `--live-test`, since the judge receives the API call traces and actual output from live testing. Without live test data, the judge evaluates based on code analysis and SKILL.md alone.
+
 ## Tech Stack
 
 - Java 21 (preview features enabled)
 - Apache Groovy 4.0 (skill execution sandbox)
-- `java.net.http.HttpClient` (live API testing)
+- `java.net.http.HttpClient` (live API testing + LLM API calls)
 - Picocli (CLI framework)
 - Jackson (JSON parsing)
+- SnakeYAML (configuration loading)
 - Maven (build + shade plugin for fat jar)
